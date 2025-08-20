@@ -83,10 +83,6 @@ export default function Home() {
     formData.append("dark", darkColor);
     formData.append("light", lightColor);
 
-    // const res = await fetch("http://localhost:8000/api/qrcode/upload", {
-    //   method: "POST",
-    //   body: formData,
-    // });
 
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/qrcode/upload`,
