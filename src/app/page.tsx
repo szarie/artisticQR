@@ -1,0 +1,241 @@
+'use client'
+
+import { useState, useCallback } from 'react';
+import Cropper from 'react-easy-crop';
+import Image from 'next/image';
+
+export default function Home() {
+  const [link, setLink] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [croppedImage, setCroppedImage] = useState<Blob | null>(null);
+  const [qrSrc, setQrSrc] = useState<string>("");
+  const [darkColor, setDarkColor] = useState("#000000");
+  const [lightColor, setLightColor] = useState("#FFFFFF");
+
+
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImage(file);
+    if (file) {
+      setImageUrl(URL.createObjectURL(file));
+    } else {
+      setImageUrl(null);
+    }
+    setCroppedImage(null);
+  };
+
+  // Get cropped image as blob
+  const getCroppedImage = useCallback(async () => {
+    if (!imageUrl || !croppedAreaPixels) return null;
+    const image = await createImage(imageUrl);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = croppedAreaPixels.width;
+    canvas.height = croppedAreaPixels.height;
+    ctx.drawImage(
+      image,
+      croppedAreaPixels.x,
+      croppedAreaPixels.y,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height,
+      0,
+      0,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height
+    );
+    return new Promise<Blob>((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+      }, 'image/png');
+    });
+  }, [imageUrl, croppedAreaPixels]);
+
+  // Helper to create HTMLImageElement from url
+  function createImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const Image = new window.Image();
+      Image.addEventListener('load', () => resolve(Image));
+      Image.addEventListener('error', error => reject(error));
+      Image.setAttribute('crossOrigin', 'anonymous');
+      Image.src = url;
+    });
+  }
+
+  // When user clicks "Crop & Use"
+  const handleCrop = async () => {
+    const cropped = await getCroppedImage();
+    if (cropped) setCroppedImage(cropped);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!link || !croppedImage) return;
+
+    const formData = new FormData();
+    formData.append("data", link);
+    formData.append("image", croppedImage, "cropped.png");
+    formData.append("dark", darkColor);
+    formData.append("light", lightColor);
+
+    const res = await fetch("http://localhost:8000/api/qrcode/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (res.ok) {
+      const blob = await res.blob();
+      setQrSrc(URL.createObjectURL(blob));
+    } else {
+      alert("Failed to generate QR code");
+    }
+  };
+
+  return (
+    <main className="flex flex-col items-center justify-center min-h-screen bg-gray-200">
+      <div className="flex flex-row w-full max-w-4xl gap-8 justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+          <div className="mb-4 text-left">
+            <h1 className="text-xl font-bold text-gray-800">Alphanumeric/URL</h1>
+          </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <input
+              type="text"
+              placeholder="Enter link"
+
+              value={link}
+              onChange={e => setLink(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              required
+              onChange={handleImageChange}
+              className="file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"
+            />
+            {/*color picker */}
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <span className="text-sm">Dark</span>
+                <input
+                  type="color"
+                  value={darkColor}
+                  onChange={e => setDarkColor(e.target.value)}
+                  className="w-8 h-8 p-0 border-0"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-sm">Light</span>
+                <input
+                  type="color"
+                  value={lightColor}
+                  onChange={e => setLightColor(e.target.value)}
+                  className="w-8 h-8 p-0 border-0"
+                />
+              </label>
+
+              <div className="flex-1">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const popup = document.getElementById('colorInfoPopup');
+                      if (popup) popup.classList.toggle('hidden');
+                    }}
+                    className="bg-blue-600 text-white  rounded-full flex items-center justify-center shadow hover:bg-blue-700 transition"
+                    aria-label="Color information"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div id="colorInfoPopup" className="hidden absolute z-10 mt-2 p-3 bg-white rounded shadow-lg text-sm w-48 right-0">
+                    <p>QR code usually have dark and light patters, It can be change using the color picker. Dark  is used for the data patterns, light for the light patters background.</p>
+                  </div>
+                </div>
+              </div>
+
+
+
+
+            </div>
+            {/* Cropper UI */}
+            {imageUrl && !croppedImage && (
+              <div className="relative w-full h-64 bg-gray-100 rounded">
+                <Cropper
+                  image={imageUrl}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_, croppedAreaPixels) => setCroppedAreaPixels(croppedAreaPixels)}
+                />
+                <button
+                  type="button"
+                  onClick={handleCrop}
+                  className="absolute bottom-1 right-1 bg-blue-600 text-white px-1 py-1 rounded shadow"
+                >
+                  Crop & Use
+                </button>
+              </div>
+            )}
+            {/* Show cropped preview */}
+            {croppedImage && (
+              <div className="flex flex-col items-center">
+                <Image
+                  src={URL.createObjectURL(croppedImage)}
+                  alt="Cropped"
+                  width={128}
+                  height={128}
+                  className="w-32 h-32 object-cover rounded border"
+                  unoptimized
+                />
+                <span className="text-xs text-gray-500 mt-1">Cropped Preview</span>
+              </div>
+            )}
+            <button
+              type="submit"
+              className="bg-blue-600 text-white rounded px-4 py-2 font-semibold hover:bg-blue-700 transition"
+              disabled={!croppedImage}
+            >
+              Generate QR Code
+            </button>
+          </form>
+        </div>
+
+        {qrSrc && (
+          <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md flex flex-col items-center">
+            <h2 className="text-lg text-center font-semibold text-gray-800">Generated QR Code</h2>
+            <Image
+              src={qrSrc}
+              alt="QR Code"
+              width={300}
+              height={300}
+              className="mt-4 rounded shadow shadow-gray-300"
+              unoptimized />
+            <button
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = qrSrc;
+                link.download = 'qrcode.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+              className="mt-6 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition duration-200"
+            >
+              Download QR Code
+            </button>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
