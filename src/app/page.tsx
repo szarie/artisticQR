@@ -6,9 +6,9 @@ import Image from 'next/image';
 
 export default function Home() {
   const [link, setLink] = useState("");
-  const [image, setImage] = useState<File | null>(null);
+  const [, setImage] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [croppedImage, setCroppedImage] = useState<Blob | null>(null);
   const [qrSrc, setQrSrc] = useState<string>("");
   const [darkColor, setDarkColor] = useState("#000000");
