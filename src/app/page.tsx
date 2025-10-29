@@ -87,7 +87,7 @@ export default function Home() {
     setLoading(true);
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/qrcode/upload`,
-      //'http://127.0.0.1:8000/api/qrcode/upload',
+
       {
         method: "POST",
         body: formData,
