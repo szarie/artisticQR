@@ -281,7 +281,7 @@ export default function Home() {
               </svg>
             </button>
             <div id="info" className="hidden absolute z-10 mt-2 p-3 bg-white rounded shadow-lg text-sm w-48 right-0">
-              <p>The first time you generate a QR code, it will take some time because the process runs on render.com using a free instance that may spin down due to inactivity, potentially delaying requests by 50 seconds or more. (broke me can't afford a server )</p>
+              <p>The first time you generate a QR code, it will take some time because the process runs on render.com using a free instance that may spin down due to inactivity, potentially delaying requests by 50 seconds or more. (broke me can&apos;t afford a server )</p>
             </div>
           </div>
         </div>
