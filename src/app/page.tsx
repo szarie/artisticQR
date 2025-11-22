@@ -76,32 +76,44 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!link || !croppedImage) return;
+    if (!link) return;
 
     const formData = new FormData();
     formData.append("data", link);
-    formData.append("image", croppedImage, "cropped.png");
+    if (croppedImage) {
+      formData.append("image", croppedImage, "cropped.png");
+    }
     formData.append("dark", darkColor);
     formData.append("light", lightColor);
 
     setLoading(true);
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/qrcode/upload`,
+    try {
+      const res = await fetch(
+        // `${process.env.NEXT_PUBLIC_API_URL}/api/qrcode/upload`,
+        'http://127.0.0.1:8000/api/qrcode/upload',
 
-      {
-        method: "POST",
-        body: formData,
+
+
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      setLoading(false);
+
+      if (res.ok) {
+        const blob = await res.blob();
+        setQrSrc(URL.createObjectURL(blob));
+      } else {
+        alert("Failed to generate QR code");
       }
-    );
-    setLoading(false);
-
-    if (res.ok) {
-      const blob = await res.blob();
-      setQrSrc(URL.createObjectURL(blob));
-    } else {
-      alert("Failed to generate QR code");
-    }
-  };
+    } catch (error) {
+      console.error('Fetcch error:', error);
+      alert("An error occurred while generating the QR code.");
+    } finally {
+      setLoading(false);
+    };
+  }
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-gray-200">
@@ -123,7 +135,6 @@ export default function Home() {
             <input
               type="file"
               accept="image/*"
-              required
               onChange={handleImageChange}
               className="file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"
             />
@@ -211,7 +222,7 @@ export default function Home() {
             <button
               type="submit"
               className="bg-blue-600 text-white rounded px-4 py-2 font-semibold hover:bg-blue-700 transition"
-              disabled={!croppedImage || loading}
+              disabled={loading}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
