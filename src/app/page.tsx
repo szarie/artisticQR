@@ -88,27 +88,24 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/qrcode/upload`,
-        //'http://127.0.0.1:8000/api/qrcode/upload',
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
 
-
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
       setLoading(false);
 
       if (res.ok) {
         const blob = await res.blob();
         setQrSrc(URL.createObjectURL(blob));
       } else {
-        alert("Failed to generate QR code");
+        const errorText = await res.text();
+        console.error('Fetch error response:', errorText);
+        alert("Failed to generate QR code: " + errorText);
       }
     } catch (error) {
-      console.error('Fetcch error:', error);
+      console.error('Fetch error:', error);
       alert("An error occurred while generating the QR code.");
     } finally {
       setLoading(false);
