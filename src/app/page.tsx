@@ -14,6 +14,8 @@ export default function Home() {
   const [darkColor, setDarkColor] = useState("#000000");
   const [lightColor, setLightColor] = useState("#FFFFFF");
   const [loading, setLoading] = useState(false);
+  const [matchingColors, setMatchingColors] = useState(false);
+  const [colorMatchMessage, setColorMatchMessage] = useState("");
 
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -24,6 +26,7 @@ export default function Home() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     setImage(file);
+    setColorMatchMessage("");
     if (file) {
       setImageUrl(URL.createObjectURL(file));
     } else {
@@ -68,6 +71,121 @@ export default function Home() {
       Image.src = url;
     });
   }
+
+  const handleMatchImageColors = async () => {
+    if (!imageUrl) return;
+
+    setMatchingColors(true);
+    try {
+      const image = await createImage(imageUrl);
+      const canvas = document.createElement('canvas');
+      const size = 64;
+      const scale = Math.min(size / image.width, size / image.height, 1);
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to read image colors');
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const colors: { red: number; green: number; blue: number; luminance: number }[] = [];
+
+      for (let index = 0; index < pixels.length; index += 4) {
+        const alpha = pixels[index + 3];
+        if (alpha < 128) continue;
+
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        colors.push({
+          red,
+          green,
+          blue,
+          luminance: 0.299 * red + 0.587 * green + 0.114 * blue,
+        });
+      }
+
+      if (colors.length === 0) {
+        throw new Error('The selected image has no readable colors');
+      }
+
+      const buckets = new Map<string, { count: number; red: number; green: number; blue: number }>();
+      for (const color of colors) {
+        const red = Math.round(color.red / 32) * 32;
+        const green = Math.round(color.green / 32) * 32;
+        const blue = Math.round(color.blue / 32) * 32;
+        const key = `${red},${green},${blue}`;
+        const bucket = buckets.get(key);
+        if (bucket) bucket.count += 1;
+        else buckets.set(key, { count: 1, red, green, blue });
+      }
+
+      const rgbToHsl = (red: number, green: number, blue: number) => {
+        const r = red / 255;
+        const g = green / 255;
+        const b = blue / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const difference = max - min;
+        const lightness = (max + min) / 2;
+        let hue = 0;
+        let saturation = 0;
+
+        if (difference !== 0) {
+          saturation = difference / (1 - Math.abs(2 * lightness - 1));
+          if (max === r) hue = ((g - b) / difference) % 6;
+          else if (max === g) hue = (b - r) / difference + 2;
+          else hue = (r - g) / difference + 4;
+          hue = (hue * 60 + 360) % 360;
+        }
+
+        return { hue, saturation };
+      };
+      const dominant = [...buckets.values()].reduce((current, candidate) => {
+        const currentHsl = rgbToHsl(current.red, current.green, current.blue);
+        const candidateHsl = rgbToHsl(candidate.red, candidate.green, candidate.blue);
+        const currentScore = current.count * Math.pow(currentHsl.saturation, 1.6);
+        const candidateScore = candidate.count * Math.pow(candidateHsl.saturation, 1.6);
+        return candidateScore > currentScore ? candidate : current;
+      });
+      const hslToHex = (hue: number, saturation: number, lightness: number) => {
+        const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        const section = hue / 60;
+        const x = chroma * (1 - Math.abs((section % 2) - 1));
+        const match = lightness - chroma / 2;
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+
+        if (section < 1) [red, green, blue] = [chroma, x, 0];
+        else if (section < 2) [red, green, blue] = [x, chroma, 0];
+        else if (section < 3) [red, green, blue] = [0, chroma, x];
+        else if (section < 4) [red, green, blue] = [0, x, chroma];
+        else if (section < 5) [red, green, blue] = [x, 0, chroma];
+        else [red, green, blue] = [chroma, 0, x];
+
+        return `#${[red, green, blue]
+          .map(channel => Math.round((channel + match) * 255).toString(16).padStart(2, '0'))
+          .join('')}`.toUpperCase();
+      };
+
+      const dominantHsl = rgbToHsl(dominant.red, dominant.green, dominant.blue);
+      const saturation = Math.min(0.85, Math.max(0.5, dominantHsl.saturation * 1.25));
+      const dark = hslToHex(dominantHsl.hue, saturation, 0.22);
+      const light = hslToHex(dominantHsl.hue, Math.min(0.35, saturation * 0.65), 0.93);
+      setDarkColor(dark);
+      setLightColor(light);
+      setColorMatchMessage(`Vibrant match: ${dark} and ${light}`);
+    } catch (error) {
+      console.error('Color matching error:', error);
+      alert('Unable to match colors from this image.');
+    } finally {
+      setMatchingColors(false);
+    }
+  };
 
   // When user clicks "Crop & Use"
   const handleCrop = async () => {
@@ -136,6 +254,20 @@ export default function Home() {
               onChange={handleImageChange}
               className="file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"
             />
+            <button
+              type="button"
+              onClick={handleMatchImageColors}
+              disabled={!imageUrl || matchingColors}
+              className="rounded bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {matchingColors ? "Matching Image Colors..." : "Match Colors to Image"}
+            </button>
+            {colorMatchMessage && (
+              <p className="text-xs text-gray-600" role="status">
+                {colorMatchMessage}
+              </p>
+            )}
+
             {/*color picker */}
             <div className="flex gap-4">
               <label className="flex items-center gap-2">
@@ -290,7 +422,7 @@ export default function Home() {
               </svg>
             </button>
             <div id="info" className="hidden absolute z-10 mt-2 p-3 bg-white rounded shadow-lg text-sm w-48 right-0">
-              <p>The first time you generate a QR code, it will take some time because the process runs on render.com using a free instance that may spin down due to inactivity, potentially delaying requests by 50 seconds or more. (broke me can&apos;t afford a server )</p>
+              <p>You can use an image to use it as a background for the QR code</p>
             </div>
           </div>
         </div>

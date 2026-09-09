@@ -4,15 +4,15 @@ export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
 
-        const backendurl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+        const backendUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL)?.replace(/\/+$/, '');
 
-        if (!backendurl) {
+        if (!backendUrl) {
             return NextResponse.json(
                 { error: 'Backend URL is not configured' },
                 { status: 500 }
             );
         }
-        const backendRes = await fetch(`${backendurl}/api/qrcode/upload`, {
+        const backendRes = await fetch(`${backendUrl}/api/qrcode/upload`, {
             method: 'POST',
             body: formData,
         });
@@ -30,17 +30,17 @@ export async function POST(request: NextRequest) {
         return new NextResponse(blob, {
             status: 200,
             headers: {
-                'Content-Type': 'image/png',
+                'Content-Type': backendRes.headers.get('content-type') || 'image/png',
             },
         });
 
 
     } catch (error) {
-        console.error('ApI route error:', error);
+        console.error('API route error:', error);
+        const message = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json(
-            { error: 'Internal Server Error' },
+            { error: `Unable to reach QR backend: ${message}` },
             { status: 500 }
         );
     }
 }
-
